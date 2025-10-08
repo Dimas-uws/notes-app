@@ -3,12 +3,17 @@ import { useState } from "react";
 
 function App() {
   const [notes, setNotes] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const baseUrl = "https://notes-app-api-rho.vercel.app"
+  const baseUrl = "https://notes-app-api-rho.vercel.app";
 
-  const fetchNotes = async () => {
+  const fetchNotes = async (query = "") => {
     try {
-      const res = await fetch(`${baseUrl}/notes`);
+      const url = query
+        ? `${baseUrl}/notes?search=${encodeURIComponent(query)}`
+        : `${baseUrl}/notes`;
+
+      const res = await fetch(url);
       const result = await res.json();
 
       setNotes(result.data);
@@ -31,8 +36,6 @@ function App() {
 
       const result = await res.json();
 
-      console.log(result.data)
-
       if (res.ok) {
         setNotes([...notes, result.data]);
       }
@@ -43,35 +46,35 @@ function App() {
 
   const handleUpdateNote = async (id, updateTitle, updateContent) => {
     try {
-      const res = await fetch(`${baseUrl}/notes${id}`, {
+      const res = await fetch(`${baseUrl}/notes/${id}`, {
         method: "PUT",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({title: updateTitle, content: updateContent})
-      })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: updateTitle, content: updateContent }),
+      });
 
-      const result = await res.json()
+      const result = await res.json();
 
-      setNotes((prevNotes) => {
-        return prevNotes.map((note) => (note.id === id ? result.data : note))
-      })
-
-      console.log(result)
+      if (res.ok) {
+        setNotes((prevNotes) =>
+          prevNotes.map((note) => (note.id === id ? result.data : note))
+        );
+      }
     } catch (error) {
-      console.error(error)
+      console.error(error);
     }
   };
 
   const handleDelete = async (id) => {
     try {
-      const res = await fetch(`${baseUrl}/notes${id}`, {
-        method: "DELETE"
-      })
+      const res = await fetch(`${baseUrl}/notes/${id}`, {
+        method: "DELETE",
+      });
 
-      if (res.ok){
-        setNotes((notes) => notes.filter((note) => note.id !== id))
+      if (res.ok) {
+        setNotes((notes) => notes.filter((note) => note.id !== id));
       }
     } catch (error) {
-      console.error(error)
+      console.error(error);
     }
   };
 
@@ -79,10 +82,28 @@ function App() {
     console.log(id);
   };
 
+  const handleSearch = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    fetchNotes(query);
+  };
+
   return (
     <>
       <Navbar />
       <main className="min-h-screen flex flex-col mt-24 items-center">
+        <h1 className="text-3xl font-bold text-gray-800 mb-15 mt-5">
+          Catatan Data Siswa Kodein 📒
+        </h1>
+
+        <input
+          type="text"
+          placeholder="Cari catatan..."
+          value={searchQuery}
+          onChange={handleSearch}
+          className="mb-8 p-3 border border-gray-400 rounded-lg w-[90%] max-w-md"
+        />
+
         <NoteForm onAddNote={addNote} />
         <NoteList
           notes={notes}
@@ -101,9 +122,9 @@ export default App;
 
 const Navbar = () => {
   return (
-    <nav className="w-full fixed top-0 flex justify-center bg-white shadow">
-      <div className="flex justify-between px-5 py-5 container">
-        <img src="/logo.svg" alt="Logo" />
+    <nav className="w-full fixed top-0 flex justify-center shadow bg-gray-100">
+      <div className="flex justify-between px-4 py-4 container ">
+        <img src="/logoDU.svg" alt="Logo" className="w-10 h-auto" />
       </div>
     </nav>
   );
@@ -149,76 +170,129 @@ const NoteForm = ({ onAddNote }) => {
   );
 };
 
-const NoteItem = ({ note, onDelete, onUpdate }) => {
-  const [isEnditing, setIsEditing] = useState(false);
-  const [titleEdit, setTilteEdit] = useState(note.title)
-  const [contentEdit, setContentEdit] = useState(note.content)
+// ================== 🧩 NoteItem (FIX EDIT) ==================
 
-  const handleCencel = () => {
-    setTilteEdit(note.title)
-    setContentEdit(note.content)
-    setIsEditing(false)
-  }
+const NoteItem = ({ note, onDelete, onUpdate }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [titleEdit, setTitleEdit] = useState(note.title);
+  const [contentEdit, setContentEdit] = useState(note.content);
+  const [showDialog, setShowDialog] = useState(false);
+
+  const handleCancelEdit = () => {
+    setTitleEdit(note.title);
+    setContentEdit(note.content);
+    setIsEditing(false);
+  };
+
+  const handleDeleteConfirm = () => {
+    setShowDialog(true);
+  };
+
+  const confirmDelete = () => {
+    onDelete(note.id);
+    setShowDialog(false);
+  };
+
+  const cancelDelete = () => {
+    setShowDialog(false);
+  };
+
+  // 🟢 FIX: pastikan kirim data & refresh state
+  const handleUpdateConfirm = async () => {
+    await onUpdate(note.id, titleEdit, contentEdit);
+    setIsEditing(false);
+  };
 
   return (
-    <div className="rounded-lg shadow-md bg-white w-[300px] p-5">
-      {isEnditing ? (
-        <>
-          <input
-            value={titleEdit}
-            type="text"
-            className="w-full rounded-sm outline outline-gray-400 p-2"
-            onChange={(e) => setTilteEdit (e.target.value)}
-          />
-
-          <textarea
-            value={contentEdit}
-            type="text"
-            className="w-full rounded-sm outline outline-gray-400 p-2 mt-2"
-            onChange={(e) => setContentEdit (e.target.value)}
-          />
-
-          <div className="mt-4 flex gap-2">
-            <button 
-            className="bg-gray-500 text-white px-3 py-1 rounded"
-            onClick={handleCencel}
-            >
-              Cancel
-            </button>
-            <button className="bg-green-500 text-white px-3 py-1 rounded"
-            onClick={() => {onUpdate(note.id, titleEdit, contentEdit)
-              setIsEditing(false)
-            }}
-            >
-              Save
-            </button>
+    <>
+      {/* ===== Popup Delete ===== */}
+      {showDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-8 text-center w-80">
+            <p className="text-gray-800 font-semibold mb-6">
+              Yakin mau hapus catatan ini?
+            </p>
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={confirmDelete}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md"
+              >
+                Hapus
+              </button>
+              <button
+                onClick={cancelDelete}
+                className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-md"
+              >
+                Batal
+              </button>
+            </div>
           </div>
-        </>
-      ) : (
-        <>
-          <p className="font-medium text-xl">{note.title}</p>
-          <p className="text-sm text-gray-500">
-            ~{showFormattedDate(note.created_at)}
-          </p>
-          <p className="mt-2">{note.content}</p>
-          <div className="mt-4 flex gap-2">
-            <button 
-            className="bg-yellow-500 text-white px-3 py-1 rounded"
-            onClick={() => setIsEditing(true)}
-            >
-              Edit
-            </button>
-            <button className="bg-red-500 text-white px-3 py-1 rounded"
-            onClick={() => onDelete(note.id)}
-            >
-              Delete
-            </button>
-          </div>
-        </>
+        </div>
       )}
-    </div>
+
+      {/* ===== Popup Edit ===== */}
+      {isEditing && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-8 w-[90%] max-w-md">
+            <h2 className="text-xl font-bold text-gray-800 mb-6 text-center">
+              Edit Catatan
+            </h2>
+            <input
+              value={titleEdit}
+              type="text"
+              className="w-full rounded-md border border-gray-400 p-3 mb-4"
+              onChange={(e) => setTitleEdit(e.target.value)}
+            />
+            <textarea
+              value={contentEdit}
+              className="w-full rounded-md border border-gray-400 p-3 min-h-[120px]"
+              onChange={(e) => setContentEdit(e.target.value)}
+            />
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-md"
+                onClick={handleCancelEdit}
+              >
+                Cancel
+              </button>
+              <button
+                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md"
+                onClick={handleUpdateConfirm}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== Card Catatan ===== */}
+      <div className="rounded-lg shadow-md bg-white w-[300px] p-5">
+        <p className="font-medium text-xl">{note.title}</p>
+        <p className="text-sm text-gray-500">
+          ~{showFormattedDate(note.created_at)}
+        </p>
+        <p className="mt-2">{note.content}</p>
+        <div className="mt-4 flex gap-2">
+          <button
+            className="bg-yellow-500 text-white px-3 py-1 rounded cursor-pointer"
+            onClick={() => setIsEditing(true)}
+          >
+            Edit
+          </button>
+          <button
+            className="bg-red-500 text-white px-3 py-1 rounded cursor-pointer"
+            onClick={handleDeleteConfirm}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </>
   );
 };
+
+// ================== NoteList ==================
 
 const NoteList = ({ notes, onUpdate, onDelete }) => {
   return (
@@ -229,7 +303,14 @@ const NoteList = ({ notes, onUpdate, onDelete }) => {
       </h2>
       <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {notes.length > 0 ? (
-          notes.map((note) => <NoteItem key={note.id} note={note} onUpdate={onUpdate} onDelete={onDelete}/>)
+          notes.map((note) => (
+            <NoteItem
+              key={note.id}
+              note={note}
+              onUpdate={onUpdate}
+              onDelete={onDelete}
+            />
+          ))
         ) : (
           <h1>Data Kosong</h1>
         )}
@@ -238,7 +319,8 @@ const NoteList = ({ notes, onUpdate, onDelete }) => {
   );
 };
 
-// helper
+// ================== Helper ==================
+
 const showFormattedDate = (date) => {
   const options = {
     year: "numeric",
